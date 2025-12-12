@@ -11,10 +11,15 @@ export interface State {
   manualApprove: boolean
   rateLimitWait: boolean
   showToken: boolean
+  verbose: boolean
 
   // Rate limiting configuration
   rateLimitSeconds?: number
   lastRequestTimestamp?: number
+
+  // Trace configuration
+  traceEnabled: boolean
+  traceFolder?: string
 }
 
 export const state: State = {
@@ -22,4 +27,6 @@ export const state: State = {
   manualApprove: false,
   rateLimitWait: false,
   showToken: false,
+  verbose: false,
+  traceEnabled: false,
 }

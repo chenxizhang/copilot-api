@@ -4,8 +4,10 @@ import consola from "consola"
 import { streamSSE } from "hono/streaming"
 
 import { awaitApproval } from "~/lib/approval"
+import { applyModelMapping, getModelMappings } from "~/lib/model-mapping"
 import { checkRateLimit } from "~/lib/rate-limit"
 import { state } from "~/lib/state"
+import { StreamTracer, traceRequest, traceResponse } from "~/lib/trace"
 import {
   createChatCompletions,
   type ChatCompletionChunk,
@@ -25,8 +27,23 @@ import { translateChunkToAnthropicEvents } from "./stream-translation"
 export async function handleCompletion(c: Context) {
   await checkRateLimit(state)
 
-  const anthropicPayload = await c.req.json<AnthropicMessagesPayload>()
+  let anthropicPayload = await c.req.json<AnthropicMessagesPayload>()
   consola.debug("Anthropic request payload:", JSON.stringify(anthropicPayload))
+
+  // Apply model mapping if configured
+  const mappings = getModelMappings()
+  if (mappings.size > 0) {
+    const { model, mapped } = applyModelMapping(anthropicPayload.model, mappings, state.verbose)
+    if (mapped) {
+      anthropicPayload = { ...anthropicPayload, model }
+    }
+  }
+
+  // Trace the original Anthropic request
+  const traceTimestamp = await traceRequest({
+    type: "anthropic",
+    original: anthropicPayload,
+  })
 
   const openAIPayload = translateToOpenAI(anthropicPayload)
   consola.debug(
@@ -50,6 +67,15 @@ export async function handleCompletion(c: Context) {
       "Translated Anthropic response:",
       JSON.stringify(anthropicResponse),
     )
+    // Trace the response (both OpenAI and translated Anthropic)
+    await traceResponse(
+      {
+        type: "anthropic",
+        openai: response,
+        translated: anthropicResponse,
+      },
+      traceTimestamp,
+    )
     return c.json(anthropicResponse)
   }
 
@@ -61,6 +87,8 @@ export async function handleCompletion(c: Context) {
       contentBlockOpen: false,
       toolCalls: {},
     }
+
+    const streamTracer = new StreamTracer(traceTimestamp)
 
     for await (const rawEvent of response) {
       consola.debug("Copilot raw stream event:", JSON.stringify(rawEvent))
@@ -77,12 +105,15 @@ export async function handleCompletion(c: Context) {
 
       for (const event of events) {
         consola.debug("Translated Anthropic event:", JSON.stringify(event))
+        streamTracer.addChunk({ openai: chunk, anthropic: event })
         await stream.writeSSE({
           event: event.type,
           data: JSON.stringify(event),
         })
       }
     }
+
+    await streamTracer.finish()
   })
 }
 

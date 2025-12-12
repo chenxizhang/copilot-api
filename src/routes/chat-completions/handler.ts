@@ -4,9 +4,11 @@ import consola from "consola"
 import { streamSSE, type SSEMessage } from "hono/streaming"
 
 import { awaitApproval } from "~/lib/approval"
+import { applyModelMapping, getModelMappings } from "~/lib/model-mapping"
 import { checkRateLimit } from "~/lib/rate-limit"
 import { state } from "~/lib/state"
 import { getTokenCount } from "~/lib/tokenizer"
+import { StreamTracer, traceRequest, traceResponse } from "~/lib/trace"
 import { isNullish } from "~/lib/utils"
 import {
   createChatCompletions,
@@ -19,6 +21,18 @@ export async function handleCompletion(c: Context) {
 
   let payload = await c.req.json<ChatCompletionsPayload>()
   consola.debug("Request payload:", JSON.stringify(payload).slice(-400))
+
+  // Apply model mapping if configured
+  const mappings = getModelMappings()
+  if (mappings.size > 0) {
+    const { model, mapped } = applyModelMapping(payload.model, mappings, state.verbose)
+    if (mapped) {
+      payload = { ...payload, model }
+    }
+  }
+
+  // Trace the request
+  const traceTimestamp = await traceRequest(payload)
 
   // Find the selected model
   const selectedModel = state.models?.data.find(
@@ -51,15 +65,20 @@ export async function handleCompletion(c: Context) {
 
   if (isNonStreaming(response)) {
     consola.debug("Non-streaming response:", JSON.stringify(response))
+    // Trace the non-streaming response
+    await traceResponse(response, traceTimestamp)
     return c.json(response)
   }
 
   consola.debug("Streaming response")
   return streamSSE(c, async (stream) => {
+    const streamTracer = new StreamTracer(traceTimestamp)
     for await (const chunk of response) {
       consola.debug("Streaming chunk:", JSON.stringify(chunk))
+      streamTracer.addChunk(chunk)
       await stream.writeSSE(chunk as SSEMessage)
     }
+    await streamTracer.finish()
   })
 }
 

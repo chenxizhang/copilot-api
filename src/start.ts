@@ -3,6 +3,7 @@
 import { defineCommand } from "citty"
 import clipboard from "clipboardy"
 import consola from "consola"
+import path from "node:path"
 import { serve, type ServerHandler } from "srvx"
 import invariant from "tiny-invariant"
 
@@ -11,6 +12,7 @@ import { initProxyFromEnv } from "./lib/proxy"
 import { generateEnvScript } from "./lib/shell"
 import { state } from "./lib/state"
 import { setupCopilotToken, setupGitHubToken } from "./lib/token"
+import { ensureTraceFolder } from "./lib/trace"
 import { cacheModels, cacheVSCodeVersion } from "./lib/utils"
 import { server } from "./server"
 
@@ -25,6 +27,8 @@ interface RunServerOptions {
   claudeCode: boolean
   showToken: boolean
   proxyEnv: boolean
+  trace: boolean
+  traceFolder?: string
 }
 
 export async function runServer(options: RunServerOptions): Promise<void> {
@@ -34,6 +38,7 @@ export async function runServer(options: RunServerOptions): Promise<void> {
 
   if (options.verbose) {
     consola.level = 5
+    state.verbose = true
     consola.info("Verbose logging enabled")
   }
 
@@ -47,6 +52,18 @@ export async function runServer(options: RunServerOptions): Promise<void> {
   state.rateLimitWait = options.rateLimitWait
   state.showToken = options.showToken
 
+  // Configure tracing
+  if (options.trace) {
+    state.traceEnabled = true
+    // Use provided folder, env variable, or default to ./traces
+    state.traceFolder =
+      options.traceFolder
+      || process.env.TRACE_OUTPUT_FOLDER
+      || path.join(process.cwd(), "traces")
+    consola.info(`Tracing enabled. Logs will be saved to: ${state.traceFolder}`)
+    await ensureTraceFolder()
+  }
+  
   await ensurePaths()
   await cacheVSCodeVersion()
 
@@ -114,9 +131,18 @@ export async function runServer(options: RunServerOptions): Promise<void> {
     `🌐 Usage Viewer: https://ericc-ch.github.io/copilot-api?endpoint=${serverUrl}/usage`,
   )
 
+  const idleTimeout =
+    process.env.IDLE_TIMEOUT ?
+      Number.parseInt(process.env.IDLE_TIMEOUT, 10)
+    : 255
+
   serve({
     fetch: server.fetch as ServerHandler,
     port: options.port,
+    // Pass idleTimeout through the bun-specific options
+    bun: {
+      idleTimeout,
+    },
   })
 }
 
@@ -184,6 +210,18 @@ export const start = defineCommand({
       default: false,
       description: "Initialize proxy from environment variables",
     },
+    trace: {
+      alias: "t",
+      type: "boolean",
+      default: false,
+      description:
+        "Enable tracing to log all LLM requests and responses to files",
+    },
+    "trace-folder": {
+      type: "string",
+      description:
+        "Folder to save trace files (defaults to TRACE_OUTPUT_FOLDER env var or ./traces)",
+    },
   },
   run({ args }) {
     const rateLimitRaw = args["rate-limit"]
@@ -202,6 +240,8 @@ export const start = defineCommand({
       claudeCode: args["claude-code"],
       showToken: args["show-token"],
       proxyEnv: args["proxy-env"],
+      trace: args.trace,
+      traceFolder: args["trace-folder"],
     })
   },
 })
