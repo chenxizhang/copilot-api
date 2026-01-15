@@ -21,6 +21,48 @@
 
 ---
 
+## Quick Start Guide
+
+To get started with this project:
+
+1. **Clone this project**
+   ```sh
+   git clone https://github.com/chenxizhang/copilot-api.git
+   cd copilot-api
+   ```
+
+2. **Install Bun** (if not already installed)  
+   Follow the installation guide at: https://bun.com/docs/installation#windows
+
+3. **Install dependencies**
+   ```sh
+   npm install
+   ```
+
+4. **Run in development mode**
+   ```sh
+   npm run dev
+   ```
+
+5. **Install Claude Code CLI**
+   ```sh
+   npm install -g @anthropic/claude-code
+   ```
+
+6. **Use Claude Code with the proxy**
+   
+   Option A - Command line with settings file:
+   ```sh
+   claude --settings localproxy.json
+   ```
+   
+   Option B - Place settings in `.claude` directory:
+   - Create a `.claude` directory in your project root
+   - Copy `localproxy.json` to `.claude/settings.json`
+   - Run `claude` normally
+
+---
+
 **Note:** If you are using [opencode](https://github.com/sst/opencode), you do not need this project. Opencode supports GitHub Copilot provider out of the box.
 
 ---
