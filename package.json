@@ -1,5 +1,5 @@
 {
-  "name": "@chenxizhang/copilot-api",
+  "name": "@daomar/copilot-api",
   "version": "0.7.0",
   "description": "Turn GitHub Copilot into OpenAI/Anthropic API compatible server. Usable with Claude Code!",
   "keywords": [
@@ -66,6 +66,7 @@
     "typescript": "^5.9.3"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   }
 }
