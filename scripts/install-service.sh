@@ -63,7 +63,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=$REPO_DIR
-ExecStart=$BUN_BIN run ./src/main.ts start --port $PORT --account-type $ACCOUNT_TYPE
+ExecStart=$BUN_BIN --env-file=/dev/null run ./src/main.ts start --port $PORT --account-type $ACCOUNT_TYPE
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
