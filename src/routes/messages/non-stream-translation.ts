@@ -68,6 +68,14 @@ function translateAnthropicMessagesToOpenAI(
     : handleAssistantMessage(message),
   )
 
+  // Some Copilot models reject assistant message prefill (the conversation must
+  // end with a user message). When the translated conversation ends with an
+  // assistant message, append a minimal user message to satisfy the backend.
+  const lastMessage = otherMessages.at(-1)
+  if (lastMessage && lastMessage.role === "assistant") {
+    otherMessages.push({ role: "user", content: "Continue." })
+  }
+
   return [...systemMessages, ...otherMessages]
 }
 
