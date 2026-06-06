@@ -19,7 +19,9 @@ export function parseModelMappings(envValue?: string): Map<string, string> {
 
     const colonIndex = trimmedPair.indexOf(":")
     if (colonIndex === -1) {
-      consola.warn(`Invalid model mapping format: "${trimmedPair}". Expected "source:target"`)
+      consola.warn(
+        `Invalid model mapping format: "${trimmedPair}". Expected "source:target"`,
+      )
       continue
     }
 
@@ -27,7 +29,9 @@ export function parseModelMappings(envValue?: string): Map<string, string> {
     const target = trimmedPair.slice(colonIndex + 1).trim()
 
     if (!source || !target) {
-      consola.warn(`Invalid model mapping: "${trimmedPair}". Both source and target must be non-empty`)
+      consola.warn(
+        `Invalid model mapping: "${trimmedPair}". Both source and target must be non-empty`,
+      )
       continue
     }
 

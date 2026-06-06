@@ -63,11 +63,14 @@ export async function runServer(options: RunServerOptions): Promise<void> {
     consola.info(`Tracing enabled. Logs will be saved to: ${state.traceFolder}`)
     await ensureTraceFolder()
   }
-  
+
   await ensurePaths()
   await cacheVSCodeVersion()
 
   if (options.githubToken) {
+    // options.githubToken is a local parameter, not derived from shared state,
+    // so this assignment is not subject to the race condition the rule warns about.
+    // eslint-disable-next-line require-atomic-updates
     state.githubToken = options.githubToken
     consola.info("Using provided GitHub token")
   } else {

@@ -48,7 +48,9 @@ describe("parseModelMappings", () => {
   })
 
   test("should skip invalid mappings without colon", () => {
-    const result = parseModelMappings("valid-source:valid-target,invalid-mapping")
+    const result = parseModelMappings(
+      "valid-source:valid-target,invalid-mapping",
+    )
     expect(result.size).toBe(1)
     expect(result.get("valid-source")).toBe("valid-target")
   })
@@ -83,7 +85,9 @@ describe("parseModelMappings", () => {
       "claude-sonnet-4-20250514:claude-opus-4-20250514",
     )
     expect(result.size).toBe(1)
-    expect(result.get("claude-sonnet-4-20250514")).toBe("claude-opus-4-20250514")
+    expect(result.get("claude-sonnet-4-20250514")).toBe(
+      "claude-opus-4-20250514",
+    )
   })
 })
 
@@ -96,14 +100,18 @@ describe("applyModelMapping", () => {
   })
 
   test("should return original model when no match found", () => {
-    const mappings = new Map<string, string>([["claude-sonnet-4", "claude-opus-4"]])
+    const mappings = new Map<string, string>([
+      ["claude-sonnet-4", "claude-opus-4"],
+    ])
     const result = applyModelMapping("gpt-4", mappings)
     expect(result.model).toBe("gpt-4")
     expect(result.mapped).toBe(false)
   })
 
   test("should return mapped model when match found", () => {
-    const mappings = new Map<string, string>([["claude-sonnet-4", "claude-opus-4"]])
+    const mappings = new Map<string, string>([
+      ["claude-sonnet-4", "claude-opus-4"],
+    ])
     const result = applyModelMapping("claude-sonnet-4", mappings)
     expect(result.model).toBe("claude-opus-4")
     expect(result.mapped).toBe(true)

@@ -33,7 +33,11 @@ export async function handleCompletion(c: Context) {
   // Apply model mapping if configured
   const mappings = getModelMappings()
   if (mappings.size > 0) {
-    const { model, mapped } = applyModelMapping(anthropicPayload.model, mappings, state.verbose)
+    const { model, mapped } = applyModelMapping(
+      anthropicPayload.model,
+      mappings,
+      state.verbose,
+    )
     if (mapped) {
       anthropicPayload = { ...anthropicPayload, model }
     }

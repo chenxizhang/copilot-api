@@ -25,7 +25,11 @@ export async function handleCompletion(c: Context) {
   // Apply model mapping if configured
   const mappings = getModelMappings()
   if (mappings.size > 0) {
-    const { model, mapped } = applyModelMapping(payload.model, mappings, state.verbose)
+    const { model, mapped } = applyModelMapping(
+      payload.model,
+      mappings,
+      state.verbose,
+    )
     if (mapped) {
       payload = { ...payload, model }
     }
