@@ -5,6 +5,7 @@ import {
   applyModelMapping,
   getModelMappings,
   clearModelMappingsCache,
+  resolveModel,
 } from "../src/lib/model-mapping"
 
 describe("parseModelMappings", () => {
@@ -219,5 +220,73 @@ describe("clearModelMappingsCache", () => {
     const result2 = getModelMappings()
     expect(result2.get("different")).toBe("mapping")
     expect(result2.get("source")).toBeUndefined()
+  })
+})
+
+describe("resolveModel", () => {
+  // Mirrors the kind of ids the Copilot backend returns.
+  const available = [
+    "claude-opus-4.8",
+    "claude-opus-4.7",
+    "claude-opus-4.7-high",
+    "claude-opus-4.7-1m-internal",
+    "claude-opus-4.6",
+    "claude-opus-4.6-1m",
+    "claude-opus-4.5",
+    "claude-sonnet-4.6",
+    "claude-sonnet-4.5",
+    "claude-haiku-4.5",
+    "gpt-5.4",
+    "gpt-4o",
+  ]
+
+  test("returns exact matches unchanged", () => {
+    const result = resolveModel("claude-sonnet-4.5", available)
+    expect(result).toEqual({ model: "claude-sonnet-4.5", mapped: false })
+  })
+
+  test("normalizes dashed version to dotted Copilot id", () => {
+    const result = resolveModel("claude-opus-4-6", available)
+    expect(result).toEqual({ model: "claude-opus-4.6", mapped: true })
+  })
+
+  test("strips trailing date suffix", () => {
+    const result = resolveModel("claude-sonnet-4-5-20250929", available)
+    expect(result).toEqual({ model: "claude-sonnet-4.5", mapped: true })
+  })
+
+  test("handles legacy family-after-version ordering", () => {
+    const result = resolveModel("claude-3-5-haiku-20241022", available)
+    // No 3.5 haiku available -> highest haiku in family
+    expect(result).toEqual({ model: "claude-haiku-4.5", mapped: true })
+  })
+
+  test("falls back to highest available version in the same family", () => {
+    const result = resolveModel("claude-opus-4-20250514", available)
+    expect(result).toEqual({ model: "claude-opus-4.8", mapped: true })
+  })
+
+  test("prefers clean ids over suffixed variants for the same version", () => {
+    // Remove the clean 4.6 so only suffixed variants remain at 4.6,
+    // ensuring exact-version selection still avoids suffixed ids when possible.
+    const ids = available.filter((id) => id !== "claude-opus-4.6")
+    const result = resolveModel("claude-opus-4-6", ids)
+    // 4.6 only exists as "-1m" now, so it should climb to highest clean opus
+    expect(result.model).toBe("claude-opus-4.8")
+  })
+
+  test("returns unchanged when no family match exists", () => {
+    const result = resolveModel("gpt-4o", available)
+    expect(result).toEqual({ model: "gpt-4o", mapped: false })
+  })
+
+  test("returns unchanged for unknown non-claude models", () => {
+    const result = resolveModel("some-random-model", available)
+    expect(result).toEqual({ model: "some-random-model", mapped: false })
+  })
+
+  test("returns unchanged when no models are available", () => {
+    const result = resolveModel("claude-opus-4-6", [])
+    expect(result).toEqual({ model: "claude-opus-4-6", mapped: false })
   })
 })

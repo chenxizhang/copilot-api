@@ -4,7 +4,11 @@ import consola from "consola"
 import { streamSSE, type SSEMessage } from "hono/streaming"
 
 import { awaitApproval } from "~/lib/approval"
-import { applyModelMapping, getModelMappings } from "~/lib/model-mapping"
+import {
+  applyModelMapping,
+  getModelMappings,
+  resolveModel,
+} from "~/lib/model-mapping"
 import { checkRateLimit } from "~/lib/rate-limit"
 import { state } from "~/lib/state"
 import { getTokenCount } from "~/lib/tokenizer"
@@ -22,17 +26,24 @@ export async function handleCompletion(c: Context) {
   let payload = await c.req.json<ChatCompletionsPayload>()
   consola.debug("Request payload:", JSON.stringify(payload).slice(-400))
 
-  // Apply model mapping if configured
+  // Resolve the requested model to an id the Copilot backend serves.
+  // Explicit MODEL_MAPPINGS take precedence; otherwise auto-map against the
+  // live model list so no configuration is required.
   const mappings = getModelMappings()
-  if (mappings.size > 0) {
-    const { model, mapped } = applyModelMapping(
-      payload.model,
-      mappings,
-      state.verbose,
+  const explicit =
+    mappings.size > 0 ?
+      applyModelMapping(payload.model, mappings, state.verbose)
+    : { model: payload.model, mapped: false }
+  const resolved =
+    explicit.mapped ? explicit : (
+      resolveModel(
+        payload.model,
+        state.models?.data.map((m) => m.id) ?? [],
+        state.verbose,
+      )
     )
-    if (mapped) {
-      payload = { ...payload, model }
-    }
+  if (resolved.model !== payload.model) {
+    payload = { ...payload, model: resolved.model }
   }
 
   // Trace the request

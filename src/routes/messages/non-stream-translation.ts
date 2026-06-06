@@ -1,3 +1,5 @@
+import { resolveModel } from "~/lib/model-mapping"
+import { state } from "~/lib/state"
 import {
   type ChatCompletionResponse,
   type ChatCompletionsPayload,
@@ -47,13 +49,10 @@ export function translateToOpenAI(
 }
 
 function translateModelName(model: string): string {
-  // Subagent requests use a specific model number which Copilot doesn't support
-  if (model.startsWith("claude-sonnet-4-")) {
-    return model.replace(/^claude-sonnet-4-.*/, "claude-sonnet-4")
-  } else if (model.startsWith("claude-opus-")) {
-    return model.replace(/^claude-opus-4-.*/, "claude-opus-4")
-  }
-  return model
+  // Model resolution is centralized in resolveModel and normally already
+  // applied by the request handler. Running it here too is idempotent and also
+  // covers any direct callers of translateToOpenAI.
+  return resolveModel(model, state.models?.data.map((m) => m.id) ?? []).model
 }
 
 function translateAnthropicMessagesToOpenAI(

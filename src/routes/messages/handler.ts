@@ -4,7 +4,11 @@ import consola from "consola"
 import { streamSSE } from "hono/streaming"
 
 import { awaitApproval } from "~/lib/approval"
-import { applyModelMapping, getModelMappings } from "~/lib/model-mapping"
+import {
+  applyModelMapping,
+  getModelMappings,
+  resolveModel,
+} from "~/lib/model-mapping"
 import { checkRateLimit } from "~/lib/rate-limit"
 import { state } from "~/lib/state"
 import { StreamTracer, traceRequest, traceResponse } from "~/lib/trace"
@@ -30,17 +34,24 @@ export async function handleCompletion(c: Context) {
   let anthropicPayload = await c.req.json<AnthropicMessagesPayload>()
   consola.debug("Anthropic request payload:", JSON.stringify(anthropicPayload))
 
-  // Apply model mapping if configured
+  // Resolve the requested model to an id the Copilot backend serves.
+  // Explicit MODEL_MAPPINGS take precedence; otherwise auto-map against the
+  // live model list so no configuration is required.
   const mappings = getModelMappings()
-  if (mappings.size > 0) {
-    const { model, mapped } = applyModelMapping(
-      anthropicPayload.model,
-      mappings,
-      state.verbose,
+  const explicit =
+    mappings.size > 0 ?
+      applyModelMapping(anthropicPayload.model, mappings, state.verbose)
+    : { model: anthropicPayload.model, mapped: false }
+  const resolved =
+    explicit.mapped ? explicit : (
+      resolveModel(
+        anthropicPayload.model,
+        state.models?.data.map((m) => m.id) ?? [],
+        state.verbose,
+      )
     )
-    if (mapped) {
-      anthropicPayload = { ...anthropicPayload, model }
-    }
+  if (resolved.model !== anthropicPayload.model) {
+    anthropicPayload = { ...anthropicPayload, model: resolved.model }
   }
 
   // Trace the original Anthropic request
