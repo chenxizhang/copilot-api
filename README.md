@@ -342,6 +342,39 @@ bun run dev
 bun run start
 ```
 
+### Run as a systemd user service (Linux)
+
+To keep the proxy running in the background and start it automatically on
+login, use the helper scripts (they auto-detect the repo path and the `bun`
+binary, so they work on any machine after `git clone`):
+
+```sh
+# install + start the service (defaults: port 4141, account-type enterprise)
+./scripts/install-service.sh
+
+# customize port / account type
+./scripts/install-service.sh --port 8080 --account-type individual
+# or via env vars:
+PORT=8080 ACCOUNT_TYPE=individual ./scripts/install-service.sh
+
+# remove the service
+./scripts/uninstall-service.sh
+```
+
+The install script runs `bun install`, writes
+`~/.config/systemd/user/copilot-api.service`, enables + starts it, and turns on
+`linger` so it survives logout. On a fresh machine the first run needs a GitHub
+login — if the logs show a device-code prompt, run `bun run ./src/main.ts auth`
+once, then `systemctl --user restart copilot-api`.
+
+Handy commands:
+
+```sh
+systemctl --user status  copilot-api
+systemctl --user restart copilot-api
+journalctl --user -u copilot-api -f
+```
+
 ## Usage Tips
 
 - To avoid hitting GitHub Copilot's rate limits, you can use the following flags:
