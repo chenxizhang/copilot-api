@@ -116,10 +116,17 @@ http_headers = { "Openai-Intent" = "conversation-edits", "x-initiator" = "user" 
     "ANTHROPIC_BASE_URL": "http://localhost:4141",
     "ANTHROPIC_AUTH_TOKEN": "dummy",
     "ANTHROPIC_MODEL": "claude-sonnet-4.5",
-    "ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4.5"
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-sonnet-4.5",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4.5",
+    "ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4.5",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4.5",
+    "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
   }
 }
 ```
+
+> Set all of the `ANTHROPIC_DEFAULT_*_MODEL` keys so Claude Code's Opus/Sonnet/Haiku aliases all map to models the proxy serves. (Running `setup` writes these for you.)
 
 Then run `npx @daomar/copilot-api@latest start`.
 
