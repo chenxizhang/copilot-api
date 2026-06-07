@@ -42,28 +42,17 @@ export async function runConfig(options: RunConfigOptions): Promise<void> {
   const doClaude = options.claude || !options.codex
   const doCodex = options.codex || !options.claude
 
-  let { codexModel, claudeModel, claudeSmallModel } = options
+  let { codexModel } = options
+  const { claudeModel, claudeSmallModel } = options
 
-  if (options.interactive) {
+  if (options.interactive && doCodex) {
     await ensurePaths()
     await cacheVSCodeVersion()
     await setupGitHubToken()
     await setupCopilotToken()
     await cacheModels()
-
-    if (doCodex) {
-      codexModel = await pickModel("Select a model for Codex CLI", codexModel)
-    }
-    if (doClaude) {
-      claudeModel = await pickModel(
-        "Select a model for Claude Code",
-        claudeModel,
-      )
-      claudeSmallModel = await pickModel(
-        "Select a small/fast model for Claude Code",
-        claudeSmallModel,
-      )
-    }
+    // Only Codex needs a model chosen; Claude Code models are auto-mapped.
+    codexModel = await pickModel("Select a model for Codex CLI", codexModel)
   }
 
   const baseUrl = proxyBaseUrl(options.host, options.port)
@@ -141,12 +130,13 @@ export const config = defineCommand({
     "claude-model": {
       type: "string",
       default: DEFAULT_CLAUDE_MODEL,
-      description: "Main model to use for Claude Code",
+      description:
+        "Pin a Claude Code model (optional; default: let the proxy auto-map)",
     },
     "claude-small-model": {
       type: "string",
       default: DEFAULT_CLAUDE_SMALL_MODEL,
-      description: "Small/fast model to use for Claude Code",
+      description: "Pin a Claude Code small/fast model (optional)",
     },
   },
   run({ args }) {

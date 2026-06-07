@@ -115,29 +115,21 @@ async function promptModels(
   choices: SetupChoices,
   models: ConfigOptions,
 ): Promise<ConfigOptions> {
-  if (!choices.doCodex && !choices.doClaude) return models
+  // Only Codex needs a model chosen; Claude Code models are auto-mapped by the
+  // proxy, so they are left unset unless pinned via a flag.
+  if (!choices.doCodex) return models
 
-  let { codexModel, claudeModel, claudeSmallModel } = models
+  let { codexModel } = models
   try {
     const ids = await loadModelIds(choices.accountType)
-    if (choices.doCodex) {
-      codexModel = await pickModel("Model for Codex CLI", ids, codexModel)
-    }
-    if (choices.doClaude) {
-      claudeModel = await pickModel("Model for Claude Code", ids, claudeModel)
-      claudeSmallModel = await pickModel(
-        "Small/fast model for Claude Code",
-        ids,
-        claudeSmallModel,
-      )
-    }
+    codexModel = await pickModel("Model for Codex CLI", ids, codexModel)
   } catch (error) {
     consola.warn(
       `Could not load the model list, using defaults instead: ${String(error)}`,
     )
   }
 
-  return { ...models, codexModel, claudeModel, claudeSmallModel }
+  return { ...models, codexModel }
 }
 
 async function writeConfigs(
@@ -283,12 +275,13 @@ export const setup = defineCommand({
     "claude-model": {
       type: "string",
       default: DEFAULT_CLAUDE_MODEL,
-      description: "Main model to use for Claude Code",
+      description:
+        "Pin a Claude Code model (optional; default: let the proxy auto-map)",
     },
     "claude-small-model": {
       type: "string",
       default: DEFAULT_CLAUDE_SMALL_MODEL,
-      description: "Small/fast model to use for Claude Code",
+      description: "Pin a Claude Code small/fast model (optional)",
     },
     "show-token": {
       type: "boolean",

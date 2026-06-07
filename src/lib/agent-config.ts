@@ -16,8 +16,10 @@ export const CLAUDE_SETTINGS_PATH = path.join(
 )
 
 export const DEFAULT_CODEX_MODEL = "gpt-5.5"
-export const DEFAULT_CLAUDE_MODEL = "claude-sonnet-4.5"
-export const DEFAULT_CLAUDE_SMALL_MODEL = "claude-haiku-4.5"
+// Claude Code models default to empty: the proxy auto-maps the model Claude Code
+// requests, so nothing is pinned unless the user explicitly asks for it.
+export const DEFAULT_CLAUDE_MODEL = ""
+export const DEFAULT_CLAUDE_SMALL_MODEL = ""
 
 export interface ConfigOptions {
   baseUrl: string
@@ -167,8 +169,9 @@ interface ClaudeSettings {
 
 // Merges the proxy-related environment variables into an existing Claude Code
 // settings object. `BASE_URL`/`AUTH_TOKEN` are always (re)written so the proxy
-// is used; model and optimization keys are only filled in when absent so the
-// user's existing preferences are preserved.
+// is used. Model variables are NOT set by default: the proxy auto-maps whatever
+// model Claude Code requests to an available Copilot model. They are only filled
+// in when the caller explicitly pins a model (and only if not already present).
 export function buildClaudeSettings(
   existing: ClaudeSettings,
   options: ConfigOptions,
@@ -179,13 +182,18 @@ export function buildClaudeSettings(
   env.ANTHROPIC_AUTH_TOKEN = "dummy"
 
   const defaults: Record<string, string> = {
-    ANTHROPIC_MODEL: options.claudeModel,
-    ANTHROPIC_DEFAULT_OPUS_MODEL: options.claudeModel,
-    ANTHROPIC_DEFAULT_SONNET_MODEL: options.claudeModel,
-    ANTHROPIC_SMALL_FAST_MODEL: options.claudeSmallModel,
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: options.claudeSmallModel,
     DISABLE_NON_ESSENTIAL_MODEL_CALLS: "1",
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+  }
+
+  if (options.claudeModel) {
+    defaults.ANTHROPIC_MODEL = options.claudeModel
+    defaults.ANTHROPIC_DEFAULT_OPUS_MODEL = options.claudeModel
+    defaults.ANTHROPIC_DEFAULT_SONNET_MODEL = options.claudeModel
+  }
+  if (options.claudeSmallModel) {
+    defaults.ANTHROPIC_SMALL_FAST_MODEL = options.claudeSmallModel
+    defaults.ANTHROPIC_DEFAULT_HAIKU_MODEL = options.claudeSmallModel
   }
 
   for (const [key, value] of Object.entries(defaults)) {

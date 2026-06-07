@@ -133,7 +133,25 @@ describe("buildClaudeSettings", () => {
     const result = buildClaudeSettings({}, options)
     expect(result.env?.ANTHROPIC_BASE_URL).toBe("http://localhost:4141")
     expect(result.env?.ANTHROPIC_AUTH_TOKEN).toBe("dummy")
+  })
+
+  test("does not pin any model when models are empty (proxy auto-maps)", () => {
+    const result = buildClaudeSettings(
+      {},
+      { ...options, claudeModel: "", claudeSmallModel: "" },
+    )
+    expect(result.env?.ANTHROPIC_MODEL).toBeUndefined()
+    expect(result.env?.ANTHROPIC_SMALL_FAST_MODEL).toBeUndefined()
+    expect(result.env?.ANTHROPIC_DEFAULT_SONNET_MODEL).toBeUndefined()
+  })
+
+  test("pins models (incl. aliases) only when explicitly provided", () => {
+    const result = buildClaudeSettings({}, options)
     expect(result.env?.ANTHROPIC_MODEL).toBe("claude-sonnet-4.5")
+    expect(result.env?.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe("claude-sonnet-4.5")
+    expect(result.env?.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe("claude-sonnet-4.5")
+    expect(result.env?.ANTHROPIC_SMALL_FAST_MODEL).toBe("claude-haiku-4.5")
+    expect(result.env?.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe("claude-haiku-4.5")
   })
 
   test("overrides an existing base url but preserves chosen models", () => {

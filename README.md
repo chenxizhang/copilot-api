@@ -114,19 +114,12 @@ http_headers = { "Openai-Intent" = "conversation-edits", "x-initiator" = "user" 
 {
   "env": {
     "ANTHROPIC_BASE_URL": "http://localhost:4141",
-    "ANTHROPIC_AUTH_TOKEN": "dummy",
-    "ANTHROPIC_MODEL": "claude-sonnet-4.5",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-sonnet-4.5",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4.5",
-    "ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4.5",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4.5",
-    "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+    "ANTHROPIC_AUTH_TOKEN": "dummy"
   }
 }
 ```
 
-> Set all of the `ANTHROPIC_DEFAULT_*_MODEL` keys so Claude Code's Opus/Sonnet/Haiku aliases all map to models the proxy serves. (Running `setup` writes these for you.)
+> You don't need to set any `ANTHROPIC_*_MODEL` variables — the proxy automatically maps whatever model Claude Code requests (Opus/Sonnet/Haiku) to an available Copilot model. If you do want to pin a specific model, use Claude Code's normal model names (e.g. `claude-sonnet-4-5`), not Copilot's dotted ids.
 
 Then run `npx @daomar/copilot-api@latest start`.
 
