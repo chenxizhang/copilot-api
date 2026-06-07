@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 
 import {
   buildSystemdUnit,
+  buildVbsLauncher,
   buildWindowsTaskXml,
   startCommandArgs,
   type ServiceTarget,
@@ -41,8 +42,27 @@ describe("buildSystemdUnit", () => {
   })
 })
 
+describe("buildVbsLauncher", () => {
+  const vbs = buildVbsLauncher(target)
+
+  test("runs the command with a hidden window (style 0)", () => {
+    expect(vbs).toContain(`CreateObject("WScript.Shell")`)
+    expect(vbs).toContain(`, 0, False`)
+  })
+
+  test("embeds the node command with doubled quotes for VBScript", () => {
+    expect(vbs).toContain(
+      `WshShell.Run """/usr/bin/node"" ""/home/me/app/dist/main.js"" start --port 4141 --account-type enterprise", 0, False`,
+    )
+  })
+})
+
 describe("buildWindowsTaskXml", () => {
-  const xml = buildWindowsTaskXml(target)
+  const xml = buildWindowsTaskXml({
+    command: String.raw`C:\Windows\System32\wscript.exe`,
+    arguments: String.raw`//B //Nologo "C:\Users\me\launch.vbs"`,
+    userId: String.raw`MYPC\me`,
+  })
 
   test("is valid-looking task XML with a logon trigger", () => {
     expect(xml).toContain("<?xml")
@@ -54,17 +74,18 @@ describe("buildWindowsTaskXml", () => {
     expect(xml).toContain("<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>")
   })
 
-  test("runs the runtime with the script and start args", () => {
-    expect(xml).toContain("<Command>/usr/bin/node</Command>")
+  test("runs via wscript with the launcher script", () => {
     expect(xml).toContain(
-      `<Arguments>"/home/me/app/dist/main.js" start --port 4141 --account-type enterprise</Arguments>`,
+      String.raw`<Command>C:\Windows\System32\wscript.exe</Command>`,
+    )
+    expect(xml).toContain(
+      String.raw`<Arguments>//B //Nologo "C:\Users\me\launch.vbs"</Arguments>`,
     )
   })
 
   test("scopes the task to the given user so it installs without admin", () => {
-    const scoped = buildWindowsTaskXml(target, String.raw`MYPC\me`)
-    expect(scoped).toContain(String.raw`<UserId>MYPC\me</UserId>`)
+    expect(xml).toContain(String.raw`<UserId>MYPC\me</UserId>`)
     // present in both the trigger and the principal
-    expect(scoped.match(/<UserId>MYPC\\me<\/UserId>/g)?.length).toBe(2)
+    expect(xml.match(/<UserId>MYPC\\me<\/UserId>/g)?.length).toBe(2)
   })
 })

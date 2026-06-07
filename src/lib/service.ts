@@ -4,6 +4,8 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
+import { PATHS } from "./paths"
+
 export const SERVICE_NAME = "copilot-api"
 export const WINDOWS_TASK_NAME = "CopilotAPI"
 
@@ -144,17 +146,48 @@ export const currentWindowsUser = (): string => {
   return domain ? `${domain}\\${username}` : username
 }
 
-export function buildWindowsTaskXml(
-  target: ServiceTarget,
-  userId?: string,
-): string {
-  const command = escapeXml(target.runtimePath)
-  const args = escapeXml(
-    [quote(target.scriptPath), ...startCommandArgs(target)].join(" "),
+const windowsLauncherPath = (): string =>
+  path.join(PATHS.APP_DIR, `${SERVICE_NAME}-launch.vbs`)
+
+const wscriptPath = (): string =>
+  path.join(
+    process.env.SystemRoot ?? String.raw`C:\Windows`,
+    "System32",
+    "wscript.exe",
   )
+
+// VBScript launcher that starts the proxy with a hidden window (window style
+// `0`), so the scheduled task does not pop up a console window.
+export function buildVbsLauncher(target: ServiceTarget): string {
+  const command = [
+    quote(target.runtimePath),
+    quote(target.scriptPath),
+    ...startCommandArgs(target),
+  ].join(" ")
+  // In VBScript string literals, double quotes are escaped by doubling them.
+  const vbsCommand = command.replaceAll('"', '""')
+
+  return [
+    `Set WshShell = CreateObject("WScript.Shell")`,
+    `WshShell.Run "${vbsCommand}", 0, False`,
+    `Set WshShell = Nothing`,
+    ``,
+  ].join("\r\n")
+}
+
+export interface WindowsTaskExec {
+  command: string
+  arguments: string
+  userId?: string
+}
+
+export function buildWindowsTaskXml(exec: WindowsTaskExec): string {
+  const command = escapeXml(exec.command)
+  const args = escapeXml(exec.arguments)
   // Scoping the trigger and principal to the current user makes this a per-user
   // task that registers without administrator rights.
-  const userTag = userId ? `\n      <UserId>${escapeXml(userId)}</UserId>` : ""
+  const userTag =
+    exec.userId ? `\n      <UserId>${escapeXml(exec.userId)}</UserId>` : ""
 
   return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -207,7 +240,16 @@ export function buildWindowsTaskXml(
 async function installWindowsTask(
   target: ServiceTarget,
 ): Promise<ServiceInstallResult> {
-  const xml = buildWindowsTaskXml(target, currentWindowsUser())
+  // Write a persistent VBScript launcher so the task can run the proxy hidden.
+  const launcherPath = windowsLauncherPath()
+  await fs.mkdir(path.dirname(launcherPath), { recursive: true })
+  await fs.writeFile(launcherPath, buildVbsLauncher(target))
+
+  const xml = buildWindowsTaskXml({
+    command: wscriptPath(),
+    arguments: `//B //Nologo ${quote(launcherPath)}`,
+    userId: currentWindowsUser(),
+  })
   const xmlPath = path.join(os.tmpdir(), `${SERVICE_NAME}-task.xml`)
   // schtasks expects the XML file to be UTF-16.
   await fs.writeFile(xmlPath, `\uFEFF${xml}`, "utf16le")
@@ -238,7 +280,7 @@ async function installWindowsTask(
   return {
     installed: true,
     manager: "schtasks",
-    message: `Scheduled task "${WINDOWS_TASK_NAME}" registered and started. Manage it in Task Scheduler.`,
+    message: `Scheduled task "${WINDOWS_TASK_NAME}" registered and started (runs hidden). Manage it in Task Scheduler.`,
   }
 }
 

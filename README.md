@@ -25,7 +25,7 @@ This will:
 2. **Configure your tools** — it writes config for Codex CLI and Claude Code so they use the proxy. The config files are created even if those tools aren't installed yet, so they'll just work once you install them. Existing settings are kept (and backed up to `*.bak`).
 3. **Run it in the background, always** — it installs a service that starts on boot and restarts if it crashes, listening on `http://localhost:4141`:
    - **Linux** — a `systemd` user service
-   - **Windows** — a Scheduled Task
+   - **Windows** — a Scheduled Task (`CopilotAPI`) that runs hidden (no console window)
 
 That's it. Open Codex or Claude Code and they'll use your Copilot subscription.
 
