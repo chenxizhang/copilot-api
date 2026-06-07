@@ -60,4 +60,11 @@ describe("buildWindowsTaskXml", () => {
       `<Arguments>"/home/me/app/dist/main.js" start --port 4141 --account-type enterprise</Arguments>`,
     )
   })
+
+  test("scopes the task to the given user so it installs without admin", () => {
+    const scoped = buildWindowsTaskXml(target, String.raw`MYPC\me`)
+    expect(scoped).toContain(String.raw`<UserId>MYPC\me</UserId>`)
+    // present in both the trigger and the principal
+    expect(scoped.match(/<UserId>MYPC\\me<\/UserId>/g)?.length).toBe(2)
+  })
 })

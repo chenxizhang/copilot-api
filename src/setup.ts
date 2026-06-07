@@ -151,7 +151,7 @@ async function writeConfigs(
 async function maybeInstallService(
   options: RunSetupOptions,
   choices: SetupChoices,
-): Promise<void> {
+): Promise<boolean> {
   let doService = options.service
   if (!options.yes && options.service) {
     doService = await consola.prompt(
@@ -159,7 +159,7 @@ async function maybeInstallService(
       { type: "confirm", initial: true },
     )
   }
-  if (!doService) return
+  if (!doService) return false
 
   const { runtimePath, scriptPath } = resolveRuntime()
   const target: ServiceTarget = {
@@ -171,17 +171,22 @@ async function maybeInstallService(
   const result = await installService(target)
   if (result.installed) consola.success(result.message)
   else consola.warn(result.message)
+  return result.installed
 }
 
-function printSummary(options: RunSetupOptions, choices: SetupChoices): void {
+function printSummary(
+  options: RunSetupOptions,
+  choices: SetupChoices,
+  serviceInstalled: boolean,
+): void {
   const baseUrl = proxyBaseUrl(options.host, choices.port)
   consola.box(
     [
       `Setup complete. Proxy URL: ${baseUrl}`,
       ``,
-      options.service ?
+      serviceInstalled ?
         `The proxy is registered to run automatically on port ${choices.port}.`
-      : `Start manually: copilot-api start --port ${choices.port} --account-type ${choices.accountType}`,
+      : `Start the proxy when you need it: copilot-api start --port ${choices.port} --account-type ${choices.accountType}`,
       ``,
       `Config files were written for Codex and/or Claude Code (created even if`,
       `those tools are not installed yet), so they will work once installed.`,
@@ -215,8 +220,8 @@ export async function runSetup(options: RunSetupOptions): Promise<void> {
   if (!options.yes) configOptions = await promptModels(choices, configOptions)
 
   await writeConfigs(choices, configOptions)
-  await maybeInstallService(options, choices)
-  printSummary(options, choices)
+  const serviceInstalled = await maybeInstallService(options, choices)
+  printSummary(options, choices, serviceInstalled)
 
   // setupGitHubToken / model fetch may keep the event loop busy; exit cleanly.
   process.exit(0)

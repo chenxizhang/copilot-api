@@ -135,9 +135,26 @@ async function installSystemdService(
 
 // --- Scheduled Task (Windows) ---
 
-export function buildWindowsTaskXml(target: ServiceTarget): string {
-  const command = target.runtimePath
-  const args = [quote(target.scriptPath), ...startCommandArgs(target)].join(" ")
+const escapeXml = (value: string): string =>
+  value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+
+export const currentWindowsUser = (): string => {
+  const domain = process.env.USERDOMAIN
+  const username = process.env.USERNAME ?? os.userInfo().username
+  return domain ? `${domain}\\${username}` : username
+}
+
+export function buildWindowsTaskXml(
+  target: ServiceTarget,
+  userId?: string,
+): string {
+  const command = escapeXml(target.runtimePath)
+  const args = escapeXml(
+    [quote(target.scriptPath), ...startCommandArgs(target)].join(" "),
+  )
+  // Scoping the trigger and principal to the current user makes this a per-user
+  // task that registers without administrator rights.
+  const userTag = userId ? `\n      <UserId>${escapeXml(userId)}</UserId>` : ""
 
   return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -146,11 +163,11 @@ export function buildWindowsTaskXml(target: ServiceTarget): string {
   </RegistrationInfo>
   <Triggers>
     <LogonTrigger>
-      <Enabled>true</Enabled>
+      <Enabled>true</Enabled>${userTag}
     </LogonTrigger>
   </Triggers>
   <Principals>
-    <Principal id="Author">
+    <Principal id="Author">${userTag}
       <LogonType>InteractiveToken</LogonType>
       <RunLevel>LeastPrivilege</RunLevel>
     </Principal>
@@ -190,7 +207,7 @@ export function buildWindowsTaskXml(target: ServiceTarget): string {
 async function installWindowsTask(
   target: ServiceTarget,
 ): Promise<ServiceInstallResult> {
-  const xml = buildWindowsTaskXml(target)
+  const xml = buildWindowsTaskXml(target, currentWindowsUser())
   const xmlPath = path.join(os.tmpdir(), `${SERVICE_NAME}-task.xml`)
   // schtasks expects the XML file to be UTF-16.
   await fs.writeFile(xmlPath, `\uFEFF${xml}`, "utf16le")
@@ -207,7 +224,12 @@ async function installWindowsTask(
     return {
       installed: false,
       manager: "schtasks",
-      message: `Failed to register task: ${create.output.trim()}. XML written to ${xmlPath}.`,
+      message:
+        `Could not register the scheduled task: ${create.output.trim()}\n`
+        + `The task XML was saved to ${xmlPath}. You can import it from an `
+        + `elevated terminal with:\n`
+        + `  schtasks /Create /TN ${WINDOWS_TASK_NAME} /XML "${xmlPath}" /F\n`
+        + `Or just start the proxy manually when needed: copilot-api start --port ${target.port} --account-type ${target.accountType}`,
     }
   }
 
