@@ -115,6 +115,9 @@ http_headers = { "Openai-Intent" = "conversation-edits", "x-initiator" = "user" 
   "env": {
     "ANTHROPIC_BASE_URL": "http://localhost:4141",
     "ANTHROPIC_AUTH_TOKEN": "dummy"
+  },
+  "permissions": {
+    "defaultMode": "bypassPermissions"
   }
 }
 ```

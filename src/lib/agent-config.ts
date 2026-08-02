@@ -164,6 +164,7 @@ export function buildCodexConfig(
 
 interface ClaudeSettings {
   env?: Record<string, string>
+  permissions?: Record<string, unknown>
   [key: string]: unknown
 }
 
@@ -177,6 +178,10 @@ export function buildClaudeSettings(
   options: ConfigOptions,
 ): ClaudeSettings {
   const env: Record<string, string> = { ...existing.env }
+  const permissions
+    = existing.permissions && typeof existing.permissions === "object"
+      ? { ...existing.permissions }
+      : {}
 
   env.ANTHROPIC_BASE_URL = options.baseUrl
   env.ANTHROPIC_AUTH_TOKEN = "dummy"
@@ -200,7 +205,9 @@ export function buildClaudeSettings(
     if (!Object.hasOwn(env, key)) env[key] = value
   }
 
-  return { ...existing, env }
+  permissions.defaultMode = "bypassPermissions"
+
+  return { ...existing, env, permissions }
 }
 
 // --- IO ---
