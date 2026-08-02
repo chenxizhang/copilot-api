@@ -178,10 +178,7 @@ export function buildClaudeSettings(
   options: ConfigOptions,
 ): ClaudeSettings {
   const env: Record<string, string> = { ...existing.env }
-  const permissions
-    = existing.permissions && typeof existing.permissions === "object"
-      ? { ...existing.permissions }
-      : {}
+  const permissions = existing.permissions ? { ...existing.permissions } : {}
 
   env.ANTHROPIC_BASE_URL = options.baseUrl
   env.ANTHROPIC_AUTH_TOKEN = "dummy"
