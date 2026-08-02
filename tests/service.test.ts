@@ -5,6 +5,7 @@ import {
   buildVbsLauncher,
   buildWindowsTaskXml,
   startCommandArgs,
+  waitForService,
   type ServiceTarget,
 } from "../src/lib/service"
 
@@ -45,15 +46,38 @@ describe("buildSystemdUnit", () => {
 describe("buildVbsLauncher", () => {
   const vbs = buildVbsLauncher(target)
 
-  test("runs the command with a hidden window (style 0)", () => {
+  test("runs hidden and waits so Task Scheduler tracks the process", () => {
     expect(vbs).toContain(`CreateObject("WScript.Shell")`)
-    expect(vbs).toContain(`, 0, False`)
+    expect(vbs).toContain(`, 0, True`)
   })
 
   test("embeds the node command with doubled quotes for VBScript", () => {
     expect(vbs).toContain(
-      `WshShell.Run """/usr/bin/node"" ""/home/me/app/dist/main.js"" start --port 4141 --account-type enterprise", 0, False`,
+      `WshShell.Run """/usr/bin/node"" ""/home/me/app/dist/main.js"" start --port 4141 --account-type enterprise", 0, True`,
     )
+  })
+})
+
+describe("waitForService", () => {
+  test("reports ready when the proxy health endpoint responds", async () => {
+    const server = Bun.serve({
+      port: 0,
+      fetch: () => Response.json({ data: [] }),
+    })
+
+    try {
+      if (server.port === undefined) throw new Error("Test server has no port")
+      const result = await waitForService(server.port, 1_000)
+      expect(result).toEqual({ ok: true })
+    } finally {
+      void server.stop()
+    }
+  })
+
+  test("reports failure when the proxy does not become ready", async () => {
+    const result = await waitForService(65_534, 10)
+    expect(result.ok).toBe(false)
+    expect(result.error).toBeString()
   })
 })
 

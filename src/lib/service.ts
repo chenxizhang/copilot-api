@@ -22,6 +22,9 @@ export interface ServiceInstallResult {
   message: string
 }
 
+const SERVICE_START_TIMEOUT_MS = 30_000
+const SERVICE_HEALTH_INTERVAL_MS = 500
+
 const quote = (value: string): string =>
   `"${value.replaceAll('"', String.raw`\"`)}"`
 
@@ -86,6 +89,37 @@ const runQuietly = (
   }
 }
 
+const wait = (duration: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, duration))
+
+export async function waitForService(
+  port: number,
+  timeout = SERVICE_START_TIMEOUT_MS,
+): Promise<{ ok: boolean; error?: string }> {
+  const deadline = Date.now() + timeout
+  let lastError = "service did not respond"
+
+  while (Date.now() < deadline) {
+    try {
+      const requestTimeout = Math.min(2_000, deadline - Date.now())
+      const response = await fetch(`http://127.0.0.1:${port}/models`, {
+        signal: AbortSignal.timeout(requestTimeout),
+      })
+      if (response.ok) return { ok: true }
+      lastError = `health check returned HTTP ${response.status}`
+    } catch (error) {
+      lastError = String(error)
+    }
+    const retryDelay = Math.min(
+      SERVICE_HEALTH_INTERVAL_MS,
+      Math.max(0, deadline - Date.now()),
+    )
+    if (retryDelay > 0) await wait(retryDelay)
+  }
+
+  return { ok: false, error: lastError }
+}
+
 async function installSystemdService(
   target: ServiceTarget,
 ): Promise<ServiceInstallResult> {
@@ -106,14 +140,37 @@ async function installSystemdService(
   const enable = runQuietly("systemctl", [
     "--user",
     "enable",
-    "--now",
     `${SERVICE_NAME}.service`,
   ])
   if (!enable.ok) {
     return {
       installed: false,
       manager: "systemd",
-      message: `Failed to enable service: ${enable.output.trim()}. Try: systemctl --user enable --now ${SERVICE_NAME}.service`,
+      message: `Failed to enable service: ${enable.output.trim()}. Try: systemctl --user enable ${SERVICE_NAME}.service`,
+    }
+  }
+
+  // `enable --now` does not restart an already-running service after its unit
+  // changes. Restart explicitly so repeated setup runs apply the new command.
+  const restart = runQuietly("systemctl", [
+    "--user",
+    "restart",
+    `${SERVICE_NAME}.service`,
+  ])
+  if (!restart.ok) {
+    return {
+      installed: false,
+      manager: "systemd",
+      message: `Failed to restart service: ${restart.output.trim()}. Try: systemctl --user restart ${SERVICE_NAME}.service`,
+    }
+  }
+
+  const health = await waitForService(target.port)
+  if (!health.ok) {
+    return {
+      installed: false,
+      manager: "systemd",
+      message: `Service was installed but did not become ready on port ${target.port}: ${health.error}. Check: journalctl --user -u ${SERVICE_NAME} -n 100`,
     }
   }
 
@@ -131,7 +188,7 @@ async function installSystemdService(
   return {
     installed: true,
     manager: "systemd",
-    message: `Service enabled. Manage with: systemctl --user status ${SERVICE_NAME}`,
+    message: `Service installed or updated and running. Manage with: systemctl --user status ${SERVICE_NAME}`,
   }
 }
 
@@ -169,7 +226,7 @@ export function buildVbsLauncher(target: ServiceTarget): string {
 
   return [
     `Set WshShell = CreateObject("WScript.Shell")`,
-    `WshShell.Run "${vbsCommand}", 0, False`,
+    `WshShell.Run "${vbsCommand}", 0, True`,
     `Set WshShell = Nothing`,
     ``,
   ].join("\r\n")
@@ -254,6 +311,10 @@ async function installWindowsTask(
   // schtasks expects the XML file to be UTF-16.
   await fs.writeFile(xmlPath, `\uFEFF${xml}`, "utf16le")
 
+  // Stop the existing tracked process before replacing the task. Failure is
+  // expected on the first install or when the task is already stopped.
+  runQuietly("schtasks", ["/End", "/TN", WINDOWS_TASK_NAME])
+
   const create = runQuietly("schtasks", [
     "/Create",
     "/TN",
@@ -275,12 +336,28 @@ async function installWindowsTask(
     }
   }
 
-  runQuietly("schtasks", ["/Run", "/TN", WINDOWS_TASK_NAME])
+  const start = runQuietly("schtasks", ["/Run", "/TN", WINDOWS_TASK_NAME])
+  if (!start.ok) {
+    return {
+      installed: false,
+      manager: "schtasks",
+      message: `Scheduled task was registered but could not be started: ${start.output.trim()}. Try: schtasks /Run /TN ${WINDOWS_TASK_NAME}`,
+    }
+  }
+
+  const health = await waitForService(target.port)
+  if (!health.ok) {
+    return {
+      installed: false,
+      manager: "schtasks",
+      message: `Scheduled task was registered but the proxy did not become ready on port ${target.port}: ${health.error}. Check Task Scheduler history for "${WINDOWS_TASK_NAME}".`,
+    }
+  }
 
   return {
     installed: true,
     manager: "schtasks",
-    message: `Scheduled task "${WINDOWS_TASK_NAME}" registered and started (runs hidden). Manage it in Task Scheduler.`,
+    message: `Scheduled task "${WINDOWS_TASK_NAME}" installed or updated and running (hidden). Manage it in Task Scheduler.`,
   }
 }
 
