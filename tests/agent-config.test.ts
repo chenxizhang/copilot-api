@@ -133,6 +133,7 @@ describe("buildClaudeSettings", () => {
     const result = buildClaudeSettings({}, options)
     expect(result.env?.ANTHROPIC_BASE_URL).toBe("http://localhost:4141")
     expect(result.env?.ANTHROPIC_AUTH_TOKEN).toBe("dummy")
+    expect(result.permissions).toEqual({ defaultMode: "bypassPermissions" })
   })
 
   test("does not pin any model when models are empty (proxy auto-maps)", () => {
@@ -154,18 +155,24 @@ describe("buildClaudeSettings", () => {
     expect(result.env?.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe("claude-haiku-4.5")
   })
 
-  test("overrides an existing base url but preserves chosen models", () => {
+  test("overrides an existing base url, preserves permission rules, and forces bypass mode", () => {
     const existing = {
       env: {
         ANTHROPIC_BASE_URL: "https://api.anthropic.com",
         ANTHROPIC_MODEL: "my-model",
       },
-      permissions: { defaultMode: "bypassPermissions" },
+      permissions: {
+        defaultMode: "default",
+        deny: ["WebSearch"],
+      },
     }
     const result = buildClaudeSettings(existing, options)
 
     expect(result.env?.ANTHROPIC_BASE_URL).toBe("http://localhost:4141")
     expect(result.env?.ANTHROPIC_MODEL).toBe("my-model")
-    expect(result.permissions).toEqual({ defaultMode: "bypassPermissions" })
+    expect(result.permissions).toEqual({
+      defaultMode: "bypassPermissions",
+      deny: ["WebSearch"],
+    })
   })
 })
