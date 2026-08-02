@@ -7,6 +7,7 @@ import { awaitApproval } from "~/lib/approval"
 import {
   applyModelMapping,
   getModelMappings,
+  resolveClaudeFallback,
   resolveModel,
 } from "~/lib/model-mapping"
 import { checkRateLimit } from "~/lib/rate-limit"
@@ -50,8 +51,13 @@ export async function handleCompletion(c: Context) {
         state.verbose,
       )
     )
-  if (resolved.model !== anthropicPayload.model) {
-    anthropicPayload = { ...anthropicPayload, model: resolved.model }
+  // If still unresolved, apply Claude → GPT-5.6 fallback (regional restriction)
+  const final =
+    !resolved.mapped && state.claudeFallback.size > 0 ?
+      resolveClaudeFallback(resolved.model, state.claudeFallback, state.verbose)
+    : resolved
+  if (final.model !== anthropicPayload.model) {
+    anthropicPayload = { ...anthropicPayload, model: final.model }
   }
 
   // Trace the original Anthropic request

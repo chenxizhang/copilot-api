@@ -166,6 +166,73 @@ export function resolveModel(
 }
 
 /**
+ * Default GPT-5.6 fallback targets for each Claude family,
+ * used when Claude models are not available in the current region.
+ *
+ *   opus   → gpt-5.6-sol   (highest tier)
+ *   sonnet → gpt-5.6-terra (mid tier)
+ *   haiku  → gpt-5.6-luna  (fastest tier)
+ */
+export const GPT_FALLBACK_FOR_CLAUDE: Record<ClaudeFamily, string> = {
+  opus: "gpt-5.6-sol",
+  sonnet: "gpt-5.6-terra",
+  haiku: "gpt-5.6-luna",
+}
+
+/**
+ * Detect whether Claude models are present in the available model list.
+ * If they are absent (regional restriction), build a family → GPT-5.6 fallback
+ * map limited to GPT models that are actually available.
+ *
+ * Intended to be called once at startup after fetching the model list.
+ */
+export function detectClaudeAvailability(availableIds: Array<string>): {
+  claudeAvailable: boolean
+  fallback: Map<string, string>
+} {
+  const claudeAvailable = availableIds.some((id) =>
+    id.toLowerCase().startsWith("claude"),
+  )
+
+  const fallback = new Map<string, string>()
+  if (!claudeAvailable) {
+    for (const [family, gptId] of Object.entries(
+      GPT_FALLBACK_FOR_CLAUDE,
+    ) as Array<[ClaudeFamily, string]>) {
+      if (availableIds.includes(gptId)) {
+        fallback.set(family, gptId)
+      }
+    }
+  }
+
+  return { claudeAvailable, fallback }
+}
+
+/**
+ * Resolve a Claude model request to its GPT-5.6 counterpart using the
+ * pre-computed fallback map (keyed by Claude family name).
+ * Returns unchanged when the model is not a Claude model or has no fallback.
+ */
+export function resolveClaudeFallback(
+  requested: string,
+  fallback: Map<string, string>,
+  verbose: boolean = false,
+): { model: string; mapped: boolean } {
+  const parsed = parseClaudeModel(requested)
+  if (!parsed) return { model: requested, mapped: false }
+
+  const target = fallback.get(parsed.family)
+  if (!target) return { model: requested, mapped: false }
+
+  if (verbose) {
+    consola.warn(
+      `Claude → GPT fallback (Claude unavailable in region): "${requested}" -> "${target}"`,
+    )
+  }
+  return { model: target, mapped: true }
+}
+
+/**
  * Get model mappings from environment variable.
  * Caches the parsed result for performance.
  */

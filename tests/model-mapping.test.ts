@@ -6,6 +6,9 @@ import {
   getModelMappings,
   clearModelMappingsCache,
   resolveModel,
+  detectClaudeAvailability,
+  resolveClaudeFallback,
+  GPT_FALLBACK_FOR_CLAUDE,
 } from "../src/lib/model-mapping"
 
 describe("parseModelMappings", () => {
@@ -288,5 +291,131 @@ describe("resolveModel", () => {
   test("returns unchanged when no models are available", () => {
     const result = resolveModel("claude-opus-4-6", [])
     expect(result).toEqual({ model: "claude-opus-4-6", mapped: false })
+  })
+})
+
+describe("detectClaudeAvailability", () => {
+  const claudeAndGptIds = [
+    "claude-opus-4.8",
+    "claude-sonnet-4.5",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+    "gpt-4o",
+  ]
+
+  const gptOnlyIds = [
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+    "gpt-4o",
+    "gpt-5.4",
+  ]
+
+  test("reports Claude available when Claude models exist", () => {
+    const { claudeAvailable, fallback } =
+      detectClaudeAvailability(claudeAndGptIds)
+    expect(claudeAvailable).toBe(true)
+    expect(fallback.size).toBe(0)
+  })
+
+  test("reports Claude unavailable and builds fallback when only GPT models available", () => {
+    const { claudeAvailable, fallback } = detectClaudeAvailability(gptOnlyIds)
+    expect(claudeAvailable).toBe(false)
+    expect(fallback.size).toBe(3)
+    expect(fallback.get("opus")).toBe("gpt-5.6-sol")
+    expect(fallback.get("sonnet")).toBe("gpt-5.6-terra")
+    expect(fallback.get("haiku")).toBe("gpt-5.6-luna")
+  })
+
+  test("only includes fallback entries for GPT tiers that are actually available", () => {
+    const partial = ["gpt-5.6-sol", "gpt-4o"] // no terra/luna
+    const { claudeAvailable, fallback } = detectClaudeAvailability(partial)
+    expect(claudeAvailable).toBe(false)
+    expect(fallback.size).toBe(1)
+    expect(fallback.get("opus")).toBe("gpt-5.6-sol")
+    expect(fallback.has("sonnet")).toBe(false)
+    expect(fallback.has("haiku")).toBe(false)
+  })
+
+  test("returns empty fallback when no models at all", () => {
+    const { claudeAvailable, fallback } = detectClaudeAvailability([])
+    expect(claudeAvailable).toBe(false)
+    expect(fallback.size).toBe(0)
+  })
+
+  test("GPT_FALLBACK_FOR_CLAUDE defines the three expected tiers", () => {
+    expect(GPT_FALLBACK_FOR_CLAUDE.opus).toBe("gpt-5.6-sol")
+    expect(GPT_FALLBACK_FOR_CLAUDE.sonnet).toBe("gpt-5.6-terra")
+    expect(GPT_FALLBACK_FOR_CLAUDE.haiku).toBe("gpt-5.6-luna")
+  })
+})
+
+describe("resolveClaudeFallback", () => {
+  const fullFallback = new Map([
+    ["opus", "gpt-5.6-sol"],
+    ["sonnet", "gpt-5.6-terra"],
+    ["haiku", "gpt-5.6-luna"],
+  ])
+
+  test("maps claude-opus variants to gpt-5.6-sol", () => {
+    expect(resolveClaudeFallback("claude-opus-4-6", fullFallback)).toEqual({
+      model: "gpt-5.6-sol",
+      mapped: true,
+    })
+    expect(resolveClaudeFallback("claude-opus-4.8", fullFallback)).toEqual({
+      model: "gpt-5.6-sol",
+      mapped: true,
+    })
+    expect(
+      resolveClaudeFallback("claude-3-opus-20240229", fullFallback),
+    ).toEqual({ model: "gpt-5.6-sol", mapped: true })
+  })
+
+  test("maps claude-sonnet variants to gpt-5.6-terra", () => {
+    expect(resolveClaudeFallback("claude-sonnet-4-5", fullFallback)).toEqual({
+      model: "gpt-5.6-terra",
+      mapped: true,
+    })
+    expect(
+      resolveClaudeFallback("claude-sonnet-4-5-20250929", fullFallback),
+    ).toEqual({ model: "gpt-5.6-terra", mapped: true })
+  })
+
+  test("maps claude-haiku variants to gpt-5.6-luna", () => {
+    expect(resolveClaudeFallback("claude-haiku-4-5", fullFallback)).toEqual({
+      model: "gpt-5.6-luna",
+      mapped: true,
+    })
+    expect(
+      resolveClaudeFallback("claude-3-5-haiku-20241022", fullFallback),
+    ).toEqual({ model: "gpt-5.6-luna", mapped: true })
+  })
+
+  test("returns unchanged for non-Claude models", () => {
+    expect(resolveClaudeFallback("gpt-4o", fullFallback)).toEqual({
+      model: "gpt-4o",
+      mapped: false,
+    })
+    expect(resolveClaudeFallback("gpt-5.6-sol", fullFallback)).toEqual({
+      model: "gpt-5.6-sol",
+      mapped: false,
+    })
+  })
+
+  test("returns unchanged when fallback map is empty", () => {
+    const empty = new Map<string, string>()
+    expect(resolveClaudeFallback("claude-opus-4-6", empty)).toEqual({
+      model: "claude-opus-4-6",
+      mapped: false,
+    })
+  })
+
+  test("returns unchanged when family has no entry in partial fallback", () => {
+    const opusOnly = new Map([["opus", "gpt-5.6-sol"]])
+    expect(resolveClaudeFallback("claude-sonnet-4-5", opusOnly)).toEqual({
+      model: "claude-sonnet-4-5",
+      mapped: false,
+    })
   })
 })

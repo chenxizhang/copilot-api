@@ -20,6 +20,11 @@ export interface State {
   // Trace configuration
   traceEnabled: boolean
   traceFolder?: string
+
+  // Claude regional availability
+  // Set once at startup by detectClaudeAvailability(); not re-checked per request.
+  claudeAvailable: boolean
+  claudeFallback: Map<string, string>
 }
 
 export const state: State = {
@@ -29,4 +34,6 @@ export const state: State = {
   showToken: false,
   verbose: false,
   traceEnabled: false,
+  claudeAvailable: true,
+  claudeFallback: new Map(),
 }
